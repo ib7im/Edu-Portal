@@ -1,0 +1,110 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user (Admin or Student)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "student"] },
+        "name": { "type": "string" },
+        "studentId": { "type": "string", "description": "Only for students" }
+      },
+      "required": ["uid", "email", "role", "name"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "Academic course",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "code": { "type": "string" },
+        "description": { "type": "string" },
+        "credits": { "type": "number" },
+        "department": { "type": "string" }
+      },
+      "required": ["id", "name", "code", "credits", "department"]
+    },
+    "Grade": {
+      "title": "Grade",
+      "description": "Student grade for a course",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentUid": { "type": "string" },
+        "courseId": { "type": "string" },
+        "grade": { "type": "string" },
+        "semester": { "type": "string" }
+      },
+      "required": ["id", "studentUid", "courseId", "grade", "semester"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Fee payment record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentUid": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["paid", "pending"] },
+        "date": { "type": "string", "format": "date-time" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "studentUid", "amount", "status", "date"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "System notification",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "recipientUid": { "type": "string", "description": "UID or 'all'" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "read": { "type": "boolean" }
+      },
+      "required": ["id", "recipientUid", "title", "message", "timestamp", "read"]
+    },
+    "Enrollment": {
+      "title": "Enrollment",
+      "description": "Student enrollment in a course",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentUid": { "type": "string" },
+        "courseId": { "type": "string" },
+        "semester": { "type": "string" }
+      },
+      "required": ["id", "studentUid", "courseId", "semester"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/courses/{courseId}": {
+      "schema": "Course",
+      "description": "Course catalog"
+    },
+    "/grades/{gradeId}": {
+      "schema": "Grade",
+      "description": "Student grades"
+    },
+    "/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Payment records"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "System notifications"
+    },
+    "/enrollments/{enrollmentId}": {
+      "schema": "Enrollment",
+      "description": "Course enrollments"
+    }
+  }
+}

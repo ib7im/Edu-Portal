@@ -1,0 +1,180 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required, immutable)
+    //   - email: string (required, format: email)
+    //   - role: string (required, enum: ['admin', 'student'])
+    //   - name: string (required)
+    //   - studentId: string (optional)
+    //
+    // Collection: courses
+    // Document ID: {courseId}
+    // Fields:
+    //   - id: string (required)
+    //   - name: string (required)
+    //   - code: string (required)
+    //   - description: string (required)
+    //   - credits: number (required)
+    //
+    // Collection: grades
+    // Document ID: {gradeId}
+    // Fields:
+    //   - id: string (required)
+    //   - studentUid: string (required)
+    //   - courseId: string (required)
+    //   - grade: string (required)
+    //   - semester: string (required)
+    //
+    // Collection: payments
+    // Document ID: {paymentId}
+    // Fields:
+    //   - id: string (required)
+    //   - studentUid: string (required)
+    //   - amount: number (required)
+    //   - status: string (required, enum: ['paid', 'pending'])
+    //   - date: string (required, format: date-time)
+    //   - description: string (required)
+    //
+    // Collection: notifications
+    // Document ID: {notificationId}
+    // Fields:
+    //   - id: string (required)
+    //   - recipientUid: string (required, UID or 'all')
+    //   - title: string (required)
+    //   - message: string (required)
+    //   - timestamp: string (required, format: date-time)
+    //   - read: bool (required)
+    //
+    // Collection: enrollments
+    // Document ID: {enrollmentId}
+    // Fields:
+    //   - id: string (required)
+    //   - studentUid: string (required)
+    //   - courseId: string (required)
+    //   - semester: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "axs83006@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateTime(dt) {
+      return dt is string && dt.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.keys().hasOnly(['uid', 'email', 'role', 'name', 'studentId']) &&
+             data.uid is string && data.uid.size() > 0 &&
+             data.email is string && isValidEmail(data.email) &&
+             data.role in ['admin', 'student'] &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             (!('studentId' in data) || (data.studentId is string && data.studentId.size() < 20));
+    }
+
+    function isValidCourse(data) {
+      return data.keys().hasOnly(['id', 'name', 'code', 'description', 'credits', 'department']) &&
+             data.id is string && data.name is string && data.code is string &&
+             data.description is string && data.credits is number && data.credits >= 0 &&
+             data.department is string;
+    }
+
+    function isValidGrade(data) {
+      return data.keys().hasOnly(['id', 'studentUid', 'courseId', 'grade', 'semester']) &&
+             data.id is string && data.studentUid is string && data.courseId is string &&
+             data.grade is string && data.semester is string;
+    }
+
+    function isValidPayment(data) {
+      return data.keys().hasOnly(['id', 'studentUid', 'amount', 'status', 'date', 'description']) &&
+             data.id is string && data.studentUid is string && data.amount is number &&
+             data.status in ['paid', 'pending'] && isValidDateTime(data.date) &&
+             data.description is string;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasOnly(['id', 'recipientUid', 'title', 'message', 'timestamp', 'read']) &&
+             data.id is string && data.recipientUid is string && data.title is string &&
+             data.message is string && isValidDateTime(data.timestamp) && data.read is bool;
+    }
+
+    function isValidEnrollment(data) {
+      return data.keys().hasOnly(['id', 'studentUid', 'courseId', 'semester']) &&
+             data.id is string && data.studentUid is string && data.courseId is string &&
+             data.semester is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (isOwner(uid) || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (isOwner(uid) || isAdmin()) && 
+                    (isAdmin() || (request.resource.data.role == resource.data.role && request.resource.data.uid == resource.data.uid));
+      allow delete: if isAdmin();
+    }
+
+    match /courses/{courseId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() && isValidCourse(request.resource.data);
+    }
+
+    match /grades/{gradeId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.studentUid == request.auth.uid);
+      allow write: if isAdmin() && isValidGrade(request.resource.data);
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.studentUid == request.auth.uid);
+      allow create: if (isAdmin() || (isAuthenticated() && request.resource.data.studentUid == request.auth.uid)) && isValidPayment(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && (resource.data.recipientUid == request.auth.uid || resource.data.recipientUid == 'all' || isAdmin());
+      allow create: if isAdmin() && isValidNotification(request.resource.data);
+      allow update: if (isAdmin() && isValidNotification(request.resource.data)) || 
+                    (isAuthenticated() && resource.data.recipientUid == request.auth.uid && 
+                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']) && 
+                     request.resource.data.read == true);
+      allow delete: if isAdmin();
+    }
+
+    match /enrollments/{enrollmentId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.studentUid == request.auth.uid);
+      allow create: if (isAdmin() || (isAuthenticated() && request.resource.data.studentUid == request.auth.uid)) && isValidEnrollment(request.resource.data);
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.studentUid == request.auth.uid);
+    }
+  }
+}
